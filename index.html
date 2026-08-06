@@ -1,0 +1,1979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MV Scheme · Contingency & Block Detail</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: rgba(15, 23, 42, 0.94);
+      --border: rgba(56, 189, 248, 0.35);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --ok: #34d399;
+      --warn: #fbbf24;
+      --bad: #f43f5e;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%;
+      background: radial-gradient(1200px 800px at 20% 0%, #132033 0%, var(--bg) 55%);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+    }
+    #canvas-wrap { position: absolute; inset: 0; }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    header {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+      padding: 12px 18px; pointer-events: none;
+    }
+    header h1 { margin: 0; font-size: 16px; font-weight: 650; }
+    header p {
+      margin: 3px 0 0; color: var(--muted); font-size: 11px; max-width: 640px; line-height: 1.35;
+    }
+    .badge {
+      display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 999px;
+      border: 1px solid var(--border); color: var(--accent); font-size: 10px;
+      background: rgba(56, 189, 248, 0.08);
+    }
+
+    .panel {
+      position: absolute; z-index: 10; background: var(--panel);
+      border: 1px solid var(--border); border-radius: 12px;
+      backdrop-filter: blur(10px); box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    }
+    .panel h2 {
+      margin: 0 0 8px; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--muted); font-weight: 600;
+    }
+
+    #scenario-panel {
+      top: 12px; right: 12px; width: 300px; padding: 12px 14px;
+    }
+    .scenario-btn {
+      display: block; width: 100%; text-align: left;
+      border: 1px solid rgba(148,163,184,0.25); background: rgba(15,23,42,0.5);
+      color: var(--text); border-radius: 8px; padding: 8px 10px; margin: 5px 0;
+      font-size: 11px; cursor: pointer; line-height: 1.3;
+    }
+    .scenario-btn:hover { border-color: var(--accent); }
+    .scenario-btn.active {
+      border-color: var(--ok); background: rgba(52, 211, 153, 0.12);
+    }
+    .scenario-btn.active.bad {
+      border-color: var(--bad); background: rgba(244, 63, 94, 0.12);
+    }
+    .scenario-btn.active.warn {
+      border-color: var(--warn); background: rgba(251, 191, 36, 0.12);
+    }
+    .scenario-btn strong { display: block; font-size: 12px; margin-bottom: 2px; }
+    .scenario-btn span { color: var(--muted); font-size: 10px; }
+
+    #status-bar {
+      margin-top: 10px; padding: 8px 10px; border-radius: 8px;
+      background: rgba(0,0,0,0.35); border: 1px solid rgba(148,163,184,0.2);
+      font-size: 11px; line-height: 1.45;
+    }
+    #status-bar .row { display: flex; justify-content: space-between; gap: 8px; margin: 3px 0; }
+    #status-bar .tag {
+      font-weight: 700; font-size: 10px; padding: 1px 6px; border-radius: 4px;
+    }
+    .tag-on { background: rgba(52,211,153,0.2); color: #6ee7b7; }
+    .tag-off { background: rgba(244,63,94,0.2); color: #fda4af; }
+    .tag-gen { background: rgba(52,211,153,0.25); color: #34d399; }
+    .tag-ups { background: rgba(167,139,250,0.25); color: #c4b5fd; }
+
+    #controls {
+      bottom: 12px; left: 12px; padding: 10px 12px; width: min(480px, calc(100vw - 24px));
+    }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 5px; }
+    button {
+      appearance: none; border: 1px solid var(--border); background: rgba(56,189,248,0.1);
+      color: var(--text); border-radius: 8px; padding: 5px 8px; font-size: 11px;
+      cursor: pointer;
+    }
+    button:hover { background: rgba(56,189,248,0.22); border-color: var(--accent); }
+    button.active { background: rgba(56,189,248,0.28); border-color: var(--accent); color: #fff; }
+    .hint { margin-top: 6px; font-size: 10px; color: var(--muted); line-height: 1.35; }
+
+    #block-panel {
+      bottom: 12px; right: 12px; width: 280px; padding: 10px 12px; max-height: 42vh; overflow: auto;
+    }
+    .block-btn {
+      display: block; width: 100%; text-align: left; border: 1px solid rgba(148,163,184,0.25);
+      background: transparent; color: var(--text); border-radius: 8px; padding: 7px 9px;
+      margin: 4px 0; font-size: 11px; cursor: pointer;
+    }
+    .block-btn:hover, .block-btn.active { border-color: #0ea5e9; background: rgba(14,165,233,0.12); }
+    .block-btn strong { color: #7dd3fc; }
+    .block-btn.future strong { color: #94a3b8; }
+    .block-btn.future:hover, .block-btn.future.active {
+      border-color: #94a3b8; background: rgba(148, 163, 184, 0.12);
+    }
+
+    #inspector {
+      top: 50%; left: 12px; transform: translateY(-50%);
+      width: 300px; padding: 12px; display: none; max-height: 60vh; overflow: auto;
+    }
+    #inspector.visible { display: block; }
+    #inspector h2 {
+      margin: 0 0 4px; font-size: 13px; color: var(--accent);
+      text-transform: none; letter-spacing: 0;
+    }
+    #inspector .meta { font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+    #inspector .lead-time {
+      display: none; margin: 0 0 8px; padding: 7px 9px; border-radius: 8px;
+      background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.45);
+      font-size: 11px; line-height: 1.35; color: #fde68a;
+    }
+    #inspector .lead-time.visible { display: block; }
+    #inspector .lead-time strong { color: #fbbf24; display: block; margin-bottom: 2px; font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.06em; }
+    #inspector p { margin: 0; font-size: 11px; line-height: 1.45; }
+    #inspector ul { margin: 6px 0 0; padding-left: 16px; font-size: 11px; }
+    #inspector li { margin: 2px 0; }
+    #inspector .lead-note {
+      margin-top: 8px; font-size: 9px; color: var(--muted); line-height: 1.35; font-style: italic;
+    }
+
+    #flow-banner {
+      position: absolute; top: 64px; left: 50%; transform: translateX(-50%);
+      z-index: 5; pointer-events: none;
+      font-size: 12px; font-weight: 600; color: #fde68a;
+      background: rgba(0,0,0,0.65); padding: 8px 16px; border-radius: 8px;
+      border: 1px solid rgba(245,158,11,0.45); max-width: min(720px, 92vw);
+      text-align: center; line-height: 1.4;
+    }
+    #flow-banner.island { color: #6ee7b7; border-color: rgba(52,211,153,0.5); }
+    #flow-banner.single { color: #fcd34d; border-color: rgba(251,191,36,0.5); }
+    #flow-banner.fail { color: #fda4af; border-color: rgba(244,63,94,0.5); }
+
+    #legend-mini {
+      position: absolute; top: 12px; left: 12px; width: 200px; padding: 10px 12px;
+      font-size: 10px;
+    }
+    .leg-row {
+      display: flex; align-items: center; gap: 8px; margin: 4px 0; color: var(--text);
+    }
+    .swatch {
+      width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.12);
+    }
+
+    /* UPS runtime HUD */
+    #ups-hud {
+      position: absolute; bottom: 118px; left: 50%; transform: translateX(-50%);
+      z-index: 12; width: min(420px, 92vw); padding: 12px 16px;
+      display: none; pointer-events: none;
+    }
+    #ups-hud.visible { display: block; }
+    #ups-hud.critical {
+      border-color: rgba(244, 63, 94, 0.65);
+      box-shadow: 0 0 24px rgba(244, 63, 94, 0.25);
+    }
+    #ups-hud.ok-border { border-color: rgba(52, 211, 153, 0.5); }
+    #ups-hud .hud-title {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+      color: #c4b5fd; margin: 0 0 6px; font-weight: 600;
+    }
+    #ups-hud .hud-time {
+      font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums;
+      color: #e9d5ff; letter-spacing: 0.04em; line-height: 1;
+    }
+    #ups-hud .hud-time.low { color: #fda4af; }
+    #ups-hud .hud-time.mid { color: #fcd34d; }
+    #ups-hud .hud-sub {
+      margin-top: 6px; font-size: 11px; color: var(--muted); line-height: 1.4;
+    }
+    #ups-hud .bar {
+      margin-top: 10px; height: 8px; border-radius: 4px;
+      background: rgba(76, 29, 149, 0.45); overflow: hidden;
+    }
+    #ups-hud .bar > i {
+      display: block; height: 100%; width: 100%;
+      background: linear-gradient(90deg, #f43f5e, #a78bfa 40%, #34d399);
+      transform-origin: left center; transition: transform 0.15s linear;
+    }
+    #ups-hud .bar.discharging > i {
+      background: linear-gradient(90deg, #f43f5e, #fbbf24);
+    }
+
+    /* Story mode */
+    #story-panel {
+      margin-top: 10px; padding-top: 10px;
+      border-top: 1px solid rgba(148,163,184,0.2);
+    }
+    #story-panel .story-controls {
+      display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px;
+    }
+    #story-progress {
+      height: 4px; border-radius: 2px; background: rgba(51,65,85,0.8); overflow: hidden;
+      margin: 6px 0;
+    }
+    #story-progress > i {
+      display: block; height: 100%; width: 0%;
+      background: linear-gradient(90deg, #38bdf8, #34d399);
+      transition: width 0.2s linear;
+    }
+    #story-step-label {
+      font-size: 11px; color: var(--text); line-height: 1.35; min-height: 2.6em;
+    }
+    #story-step-label em {
+      display: block; font-style: normal; color: var(--muted); font-size: 10px; margin-top: 2px;
+    }
+    button.story-active {
+      background: rgba(52, 211, 153, 0.28) !important;
+      border-color: #34d399 !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-wrap"></div>
+  <div id="flow-banner">NORMAL: Util1 + Util2 feed SWGR A/B · A–B N.O. open · Gens standby · UPS on utility via dual XFMR paths</div>
+
+  <header>
+    <h1>MV Contingency Simulator · PB-5 Block Detail</h1>
+    <p>
+      Util: G&amp;W 6-way PM + SEL-487E · Gen: 4× sets / dual gen bus (breaker-class) · P3 default · P4 island · P1 option.
+      Blocks A–C live · Block D future. Click PM-SWGR for G&amp;W + 487E detail.
+    </p>
+    <span class="badge">Concept viz · Not for construction</span>
+  </header>
+
+  <aside id="legend-mini" class="panel">
+    <h2>Power colors</h2>
+    <div class="leg-row"><span class="swatch" style="background:#f59e0b"></span> Utility MV live</div>
+    <div class="leg-row"><span class="swatch" style="background:#34d399"></span> Generator / island MV</div>
+    <div class="leg-row"><span class="swatch" style="background:#a78bfa"></span> UPS critical path</div>
+    <div class="leg-row"><span class="swatch" style="background:#64748b"></span> De-energized / open</div>
+    <div class="leg-row"><span class="swatch" style="background:#f43f5e"></span> Faulted utility</div>
+  </aside>
+
+  <aside id="scenario-panel" class="panel">
+    <h2>Utility contingency</h2>
+    <button type="button" class="scenario-btn active" data-sc="normal">
+      <strong>Both utilities healthy</strong>
+      <span>Normal dual-feed · gens standby · UPS on util</span>
+    </button>
+    <button type="button" class="scenario-btn warn" data-sc="drop1">
+      <strong>Drop Utility Feed 1</strong>
+      <span>SWGR A dark · Feed 2 + optional gen neck · P3 path</span>
+    </button>
+    <button type="button" class="scenario-btn warn" data-sc="drop2">
+      <strong>Drop Utility Feed 2</strong>
+      <span>SWGR B dark · Feed 1 carries · gen assist optional</span>
+    </button>
+    <button type="button" class="scenario-btn bad" data-sc="island">
+      <strong>Drop both → Island (P4)</strong>
+      <span>Gens isochronous · necks to A/B · UPS retransfers</span>
+    </button>
+    <button type="button" class="scenario-btn" data-sc="p3">
+      <strong>P3 soft transfer sequence</strong>
+      <span>Animate util→gen handoff (brief parallel)</span>
+    </button>
+
+    <div id="story-panel">
+      <h2>Story mode</h2>
+      <div class="story-controls">
+        <button type="button" id="btn-story-play">▶ Play story</button>
+        <button type="button" id="btn-story-pause">Pause</button>
+        <button type="button" id="btn-story-restart">Restart</button>
+      </div>
+      <div id="story-progress"><i id="story-progress-fill"></i></div>
+      <div id="story-step-label">
+        Idle — press Play for auto sequence
+        <em>Normal → Drop Util1 → Both lost (UPS countdown) → Island gens → Restore utils</em>
+      </div>
+    </div>
+
+    <div id="status-bar">
+      <div class="row"><span>Utility 1</span><span class="tag tag-on" id="st-u1">ON</span></div>
+      <div class="row"><span>Utility 2</span><span class="tag tag-on" id="st-u2">ON</span></div>
+      <div class="row"><span>A–B N.O. tie</span><span class="tag tag-off" id="st-tie">OPEN</span></div>
+      <div class="row"><span>Gen plant</span><span class="tag tag-off" id="st-gen">STANDBY</span></div>
+      <div class="row"><span>UPS mode</span><span class="tag tag-ups" id="st-ups">DOUBLE-CONVERT</span></div>
+      <div class="row"><span>UPS runtime</span><span class="tag tag-ups" id="st-batt">FULL</span></div>
+      <div class="row"><span>IT halls</span><span class="tag tag-on" id="st-it">POWERED</span></div>
+    </div>
+  </aside>
+
+  <aside id="ups-hud" class="panel">
+    <div class="hud-title">UPS battery · design runtime remaining</div>
+    <div class="hud-time" id="ups-time">8:00</div>
+    <div class="bar" id="ups-bar"><i id="ups-bar-fill"></i></div>
+    <div class="hud-sub" id="ups-hud-sub">
+      Indicative 8:00 design autonomy at load · accelerated in this viz · gens must close before zero
+    </div>
+  </aside>
+
+  <aside id="controls" class="panel">
+    <h2>Views &amp; animation</h2>
+    <div class="btn-row">
+      <button type="button" id="btn-iso" class="active">Isometric</button>
+      <button type="button" id="btn-top">Top</button>
+      <button type="button" id="btn-block">Block close-up</button>
+      <button type="button" id="btn-ups">UPS close-up</button>
+      <button type="button" id="btn-flow" class="active">Flow on</button>
+      <button type="button" id="btn-labels" class="active">Labels</button>
+      <button type="button" id="btn-play-p3">Replay P3</button>
+      <button type="button" id="btn-story-play-2">▶ Story</button>
+    </div>
+    <div class="hint">
+      Drag orbit · Scroll zoom · Click equipment · <strong>Story mode</strong> auto-plays contingencies ·
+      UPS HUD counts down while both utils are down before gen retransfer
+    </div>
+  </aside>
+
+  <aside id="block-panel" class="panel">
+    <h2>PB-5 blocks · focus</h2>
+    <button type="button" class="block-btn active" data-block="all"><strong>All blocks</strong> Campus overview · 3 live + 1 future</button>
+    <button type="button" class="block-btn" data-block="0"><strong>Block A</strong> ~5 MW IT · dual UPS trains</button>
+    <button type="button" class="block-btn" data-block="1"><strong>Block B</strong> ~5 MW IT · dual UPS trains</button>
+    <button type="button" class="block-btn" data-block="2"><strong>Block C</strong> ~5 MW IT · dual UPS trains</button>
+    <button type="button" class="block-btn future" data-block="3"><strong>Block D · Future</strong> Phase 2 PB-5 · not energized</button>
+    <div style="margin-top:8px;font-size:10px;color:var(--muted);line-height:1.4" id="block-blurb">
+      Scale ≈1 unit = 1 m. Blocks A–C live; Block D is future expansion (ghosted, not on power scenarios). Same PB-5 dual-path kit when released.
+    </div>
+  </aside>
+
+  <aside id="inspector" class="panel">
+    <h2 id="insp-title">Equipment</h2>
+    <div class="meta" id="insp-meta"></div>
+    <div class="lead-time" id="insp-lead"><strong>Est. lead time (order → delivery)</strong><span id="insp-lead-val"></span></div>
+    <p id="insp-body"></p>
+    <ul id="insp-list"></ul>
+    <div class="lead-note" id="insp-lead-note">Planning ranges, ~2025–26 market (order→delivery). Confirm with OEM / utility quote; allocation, emissions tier, and custom options can move dates.</div>
+  </aside>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+
+    // ── State ────────────────────────────────────────────────────
+    // UPS design runtime (seconds of *design* autonomy shown on HUD)
+    const UPS_DESIGN_SEC = 8 * 60; // 8:00 design SLA-style autonomy
+    // How fast design-seconds burn while on battery in the viz (real sec → design sec)
+    const UPS_BURN_RATE = 48; // ~10s real ≈ 8 min design during blackout bridge
+    // Gen start delay after dual-util loss (real seconds before gens retransfer)
+    const GEN_START_REAL_SEC = 6.5;
+
+    const state = {
+      scenario: "normal", // normal | drop1 | drop2 | island | island_bridge | p3 | restore
+      genMode: "g2",
+      flowOn: true,
+      labelsOn: true,
+      focusBlock: "all",
+      p3Phase: 0,
+      p3Playing: false,
+      // UPS battery
+      upsRemainingSec: UPS_DESIGN_SEC, // design-seconds remaining
+      upsDischarging: false,
+      upsOnGen: false,
+      dualOutageTimer: 0, // real seconds since both utils lost
+      gensClosedAfterOutage: false,
+      // Story mode
+      storyPlaying: false,
+      storyPaused: false,
+      storyStep: 0,
+      storyStepTimer: 0,
+    };
+
+    /**
+     * Story: Normal → Drop Util1 → Both lost (UPS countdown) → Island gens → Restore
+     * Durations in real seconds.
+     */
+    const STORY = [
+      {
+        id: "normal",
+        label: "1/5 · Both utilities healthy",
+        detail: "Dual feed · gens standby · UPS double-convert · batteries full",
+        duration: 4.5,
+        scenario: "normal",
+      },
+      {
+        id: "drop1",
+        label: "2/5 · Drop Utility Feed 1",
+        detail: "Feed 2 carries · gens assist neck A · UPS brief battery then retransfer",
+        duration: 5.5,
+        scenario: "drop1",
+      },
+      {
+        id: "bridge",
+        label: "3/5 · Both utilities lost — UPS bridge",
+        detail: "Gens starting · UPS on battery · runtime countdown · IT held",
+        duration: GEN_START_REAL_SEC,
+        scenario: "island_bridge",
+      },
+      {
+        id: "island",
+        label: "4/5 · Island (P4) — gens online",
+        detail: "Isochronous load-share · necks A+B · UPS retransfers off battery",
+        duration: 6,
+        scenario: "island",
+      },
+      {
+        id: "restore",
+        label: "5/5 · Restore utilities (P3 reverse)",
+        detail: "Sync to util · soft return · gens cool-down to standby",
+        duration: 5.5,
+        scenario: "restore",
+      },
+    ];
+
+    const wrap = document.getElementById("canvas-wrap");
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x0b1220, 0.01);
+
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 400);
+    camera.position.set(46, 34, 52);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    wrap.appendChild(renderer.domElement);
+
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.domElement.style.cssText = "position:absolute;inset:0;pointer-events:none";
+    wrap.appendChild(labelRenderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.maxPolarAngle = Math.PI * 0.49;
+    controls.minDistance = 8;
+    controls.maxDistance = 140;
+    controls.target.set(0, 2, 4);
+
+    scene.add(new THREE.AmbientLight(0x8ba3c7, 0.5));
+    const key = new THREE.DirectionalLight(0xffffff, 1.05);
+    key.position.set(30, 50, 24);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    Object.assign(key.shadow.camera, { near: 1, far: 160, left: -70, right: 70, top: 70, bottom: -70 });
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0x38bdf8, 0.28);
+    fill.position.set(-22, 18, -10);
+    scene.add(fill);
+
+    const ground = new THREE.Mesh(
+      new THREE.CircleGeometry(80, 64),
+      new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.2, roughness: 0.92 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+    scene.add(new THREE.GridHelper(90, 45, 0x1e3a5f, 0x152033));
+
+    // Materials (cloneable base colors)
+    function std(color, opts = {}) {
+      return new THREE.MeshStandardMaterial({
+        color, metalness: opts.metalness ?? 0.45, roughness: opts.roughness ?? 0.35,
+        emissive: opts.emissive ?? 0x000000, emissiveIntensity: opts.ei ?? 0,
+        transparent: !!opts.opacity, opacity: opts.opacity ?? 1,
+      });
+    }
+
+    const MAT = {
+      utilLive: std(0xf43f5e, { metalness: 0.5 }),
+      utilDead: std(0x4c0519, { metalness: 0.4, roughness: 0.7 }),
+      swLive: std(0xfb923c),
+      swDead: std(0x44403c, { roughness: 0.7 }),
+      sel: std(0x38bdf8, { emissive: 0x0284c7, ei: 0.35 }),
+      genLive: std(0x34d399, { emissive: 0x047857, ei: 0.25 }),
+      genStandby: std(0x064e3b, { roughness: 0.6 }),
+      genDark: std(0x047857),
+      xfmr: std(0x22c55e),
+      xfmrTop: std(0x166534),
+      swbd: std(0x6366f1),
+      ups: std(0xa78bfa),
+      upsModule: std(0x8b5cf6),
+      batt: std(0x4c1d95),
+      bypass: std(0xc4b5fd),
+      bus: std(0xe2e8f0, { metalness: 0.85, roughness: 0.15 }),
+      pdu: std(0x818cf8),
+      it: std(0x0ea5e9, { metalness: 0.25, roughness: 0.45, opacity: 0.45 }),
+      itSolid: std(0x0284c7),
+      slab: std(0x334155, { metalness: 0.2, roughness: 0.85 }),
+      gallery: std(0x1e293b, { metalness: 0.25, roughness: 0.8, opacity: 0.88 }),
+      cableUtil: std(0xfbbf24, { metalness: 0.7, emissive: 0xb45309, ei: 0.3 }),
+      cableGen: std(0x6ee7b7, { metalness: 0.65, emissive: 0x047857, ei: 0.3 }),
+      cableDead: std(0x475569, { metalness: 0.3, roughness: 0.8, ei: 0 }),
+      cableUps: std(0xc4b5fd, { metalness: 0.6, emissive: 0x6d28d9, ei: 0.2 }),
+      no: std(0xf43f5e, { emissive: 0xbe123c, ei: 0.45 }),
+    };
+
+    const pickables = [];
+    const labels = [];
+    const powerMeshes = []; // { mesh, role, blockIndex? }
+    const cableEntries = []; // { mesh, curve, role, blockIndex? }
+    const flowParticles = [];
+
+    function makeLabel(text, pos, color = "#e2e8f0") {
+      const div = document.createElement("div");
+      div.textContent = text;
+      div.style.cssText = `color:${color};font-size:10px;font-weight:600;white-space:nowrap;padding:2px 6px;border-radius:5px;background:rgba(15,23,42,0.88);border:1px solid rgba(148,163,184,0.35);transform:translate(-50%,-100%);`;
+      const obj = new CSS2DObject(div);
+      obj.position.copy(pos);
+      labels.push(obj);
+      return obj;
+    }
+
+    function addPick(mesh, info) {
+      // Normalize lead time into list for consistent inspector display
+      if (info && info.leadTime) {
+        const line = `Est. lead time: ${info.leadTime}`;
+        const list = Array.isArray(info.list) ? info.list.slice() : [];
+        if (!list.some((t) => /lead time/i.test(t))) list.unshift(line);
+        info = { ...info, list };
+      }
+      mesh.userData.info = info;
+      pickables.push(mesh);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+    }
+
+    function showInspector(info) {
+      if (!info) return;
+      document.getElementById("insp-title").textContent = info.title || "Equipment";
+      document.getElementById("insp-meta").textContent = info.meta || "";
+      document.getElementById("insp-body").textContent = info.body || "";
+      const leadEl = document.getElementById("insp-lead");
+      const leadVal = document.getElementById("insp-lead-val");
+      if (info.leadTime) {
+        leadVal.textContent = info.leadTime;
+        leadEl.classList.add("visible");
+      } else {
+        leadVal.textContent = "";
+        leadEl.classList.remove("visible");
+      }
+      const ul = document.getElementById("insp-list");
+      ul.innerHTML = "";
+      (info.list || []).forEach((t) => {
+        const li = document.createElement("li");
+        li.textContent = t;
+        ul.appendChild(li);
+      });
+      document.getElementById("inspector").classList.add("visible");
+    }
+
+    function box(w, h, d, mat, x, y, z) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      m.position.set(x, y, z);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      return m;
+    }
+
+    function cyl(r, h, mat, x, y, z) {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 16), mat);
+      m.position.set(x, y, z);
+      m.castShadow = true;
+      return m;
+    }
+
+    function registerPower(mesh, role, blockIndex = null) {
+      powerMeshes.push({ mesh, role, blockIndex, baseMat: mesh.material });
+    }
+
+    function cablePath(points, radius, role, blockIndex = null, parent = scene) {
+      const curve = new THREE.CatmullRomCurve3(points);
+      const mat = MAT.cableUtil.clone();
+      const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 36, radius, 6, false), mat);
+      mesh.castShadow = true;
+      parent.add(mesh);
+      cableEntries.push({ mesh, curve, role, blockIndex });
+      return curve;
+    }
+
+    // ── Gallery ──────────────────────────────────────────────────
+    scene.add(box(72, 0.28, 16, MAT.gallery, 0, 0.14, -5));
+    scene.add(box(72, 1.6, 0.12, MAT.slab, 0, 1.0, -12.6));
+    scene.add(makeLabel("ELECTRICAL GALLERY · spare ways for Block D future", new THREE.Vector3(0, 0.6, -12.3), "#94a3b8"));
+
+    // ── Utilities ────────────────────────────────────────────────
+    function makeUtility(x, z, name, feedId) {
+      const g = new THREE.Group();
+      g.position.set(x, 0, z);
+      g.add(box(2.6, 0.22, 2.0, MAT.slab, 0, 0.18, 0));
+      const body = box(2.0, 2.6, 1.5, MAT.utilLive.clone(), 0, 1.55, 0);
+      body.userData.feedId = feedId;
+      registerPower(body, feedId === 1 ? "util1" : "util2");
+      addPick(body, {
+        title: name,
+        meta: `Utility Feed ${feedId} · 13.8 kV class`,
+        body: "Independent utility source into its 6-way pad-mount SWGR (Way 1). Scenario panel shows loss of this feed. Schedule is utility/interconnect driven more than OEM catalog.",
+        leadTime: "12–36+ months (utility interconnect / service program — not OEM factory lead time)",
+        list: [
+          "Normal: closed into SWGR",
+          "Contingency: opens / fails → peer feed + gen path",
+          "Never closed-paralleled with other util via A–B tie",
+          "Path: studies, ESA/IA, construction — often critical path for COD",
+        ],
+      });
+      g.add(body);
+      g.add(box(2.1, 0.15, 1.55, MAT.utilDead, 0, 2.95, 0));
+      g.add(makeLabel(name, new THREE.Vector3(0, 3.8, 0), "#fb7185"));
+      scene.add(g);
+      return body;
+    }
+    const util1Body = makeUtility(-11, -21, "UTILITY FEED 1", 1);
+    const util2Body = makeUtility(11, -21, "UTILITY FEED 2", 2);
+
+    // ── 6-way SWGR ───────────────────────────────────────────────
+    function makeSixWay(x, z, name, rolePrefix) {
+      const g = new THREE.Group();
+      g.position.set(x, 0, z);
+      g.add(box(5.0, 0.2, 2.5, MAT.slab, 0, 0.25, 0));
+      const body = box(4.6, 2.0, 2.0, MAT.swLive.clone(), 0, 1.35, 0);
+      registerPower(body, rolePrefix);
+      addPick(body, {
+        title: `${name} — G&W Pad-Mounted Switchgear`,
+        meta: "G&W Electric · 6-way pad-mount · 15 kV class · Indoor application",
+        body: "Platform standard medium-voltage switchgear: G&W pad-mounted multi-way unit with six ways (W1 utility, W2 N.O. peer tie, W3–W5 block/XFMR feeders, W6 spare or gen). Protection, control, metering, and way automation for all six terminals are provided by a single SEL-487E (487E failure = this SWGR out of service).",
+        leadTime: "G&W 6-way PM: ~40–70 weeks typical · can run 50–80 weeks in tight markets · SEL-487E: ~16–40 weeks",
+        list: [
+          "Manufacturer: G&W Electric (pad-mounted switchgear)",
+          "Controller / protection: SEL-487E (one device, up to 6 terminals)",
+          "SEL-487E: overcurrent on each way, inrush/2nd-harmonic blocking, metering & automation",
+          "LEA voltage inputs supported for pad-mount applications",
+          "W1 util · W2 N.O. A↔B tie · W3–W5 loads · W6 spare/gen",
+          "Interlocks prevent closed-paralleling Utility 1 ‖ Utility 2 via tie",
+          "EPMS/SCADA via SEL-487E communications",
+          "Quote early — switchgear allocation can move out under DC demand",
+        ],
+      });
+      g.add(body);
+      // G&W-style compartment doors (6 ways) — no per-way labels (keeps scene clean)
+      for (let i = 0; i < 6; i++) {
+        g.add(box(0.65, 1.45, 0.07, MAT.swDead, -1.95 + i * 0.78, 1.25, 1.02));
+        g.add(cyl(0.07, 0.25, MAT.bus, -1.95 + i * 0.78, 2.5, 0.1));
+      }
+      // SEL-487E control cabinet (visual only — details via click on SWGR body)
+      const sel = box(0.95, 1.15, 0.5, MAT.sel, 2.85, 1.2, 0.15);
+      // Clicking cabinet uses same G&W + SEL-487E info as the main tank
+      sel.userData.info = body.userData.info;
+      pickables.push(sel);
+      sel.castShadow = true;
+      g.add(sel);
+      g.add(box(1.0, 0.1, 0.55, MAT.sel, 2.85, 1.85, 0.15));
+      g.add(box(0.65, 0.4, 0.04, MAT.sel, 2.85, 1.25, 0.42));
+      // Single clean name label only
+      g.add(makeLabel(name, new THREE.Vector3(0, 3.1, 0), "#fdba74"));
+      scene.add(g);
+      return body;
+    }
+    makeSixWay(-11, -10, "PM-SWGR A", "swgrA");
+    makeSixWay(11, -10, "PM-SWGR B", "swgrB");
+
+    // Util → SWGR cables
+    cablePath([
+      new THREE.Vector3(-11, 2.3, -19.5), new THREE.Vector3(-11, 2.8, -15), new THREE.Vector3(-11, 2.2, -11.2),
+    ], 0.11, "util1");
+    cablePath([
+      new THREE.Vector3(11, 2.3, -19.5), new THREE.Vector3(11, 2.8, -15), new THREE.Vector3(11, 2.2, -11.2),
+    ], 0.11, "util2");
+
+    // N.O. tie
+    cablePath([
+      new THREE.Vector3(-8.2, 2.0, -10), new THREE.Vector3(0, 2.6, -10), new THREE.Vector3(8.2, 2.0, -10),
+    ], 0.09, "tie");
+    const noMark = box(0.4, 0.4, 0.4, MAT.no, 0, 2.9, -10);
+    scene.add(noMark);
+    scene.add(makeLabel("N.O. TIE (normally open)", new THREE.Vector3(0, 3.5, -10), "#fb7185"));
+
+    // ── Gen plant: 4 gens · dual gen bus · copper-efficient necks ─
+    // Util PM-SWGR A/B = G&W + SEL-487E. Gen buses = breaker / gen-rated VFI duty (X"d study).
+    const genGroup = new THREE.Group();
+    scene.add(genGroup);
+
+    // Breaker-class look for gen gear (darker / more "metal-clad" than util pad-mount orange)
+    const matGenBus = std(0x115e59, { metalness: 0.55, roughness: 0.32 });
+    const matGenBusLive = std(0x14b8a6, { metalness: 0.5, roughness: 0.3, emissive: 0x0f766e, ei: 0.2 });
+
+    // GEN BUS 1 + G1/G2 stay on SWGR A side (short Neck A).
+    // GEN BUS 2 + G3/G4 on the FAR side of PM-SWGR B (short Neck B).
+    // Gen-bus tie spans A-side ↔ B-side yards.
+    const GEN_BUS1 = { x: -18, z: -16 }; // by SWGR A
+    const GEN_BUS2 = { x: 20, z: -16 };  // far side of SWGR B
+
+    function makeGenSet(num, x, z, busName) {
+      const gb = box(2.3, 1.7, 2.0, MAT.genStandby.clone(), x, 1.05, z);
+      registerPower(gb, "gen");
+      addPick(gb, {
+        title: `Generator ${num}`,
+        meta: `13.8 kV class · Hardwired to ${busName} only`,
+        body: "MV generator set. Not dual-homed to both buses (saves copper). Island (P4): load-share when gen-bus tie closed. Grid parallel: sync via home bus neck only. Large frames are often the longest OEM critical path.",
+        leadTime: "~50–78 weeks (1.5–3 MW class) · large frames ~70–110+ weeks; stressed quotes 72–104 weeks reported",
+        list: [
+          "SEL-700G (or equiv) machine protection — relay often ~16–40 weeks",
+          "Gen breaker / VFI must cover X″d fault contribution",
+          "P3 soft-transfer · P4 island · P1 site option",
+          "Emissions tier (e.g. Tier 4) and enclosure options can extend lead time",
+          "480 V stock units may be faster but need step-up XFMRs (Maddox pad-mount path ~36 weeks if used)",
+        ],
+      });
+      genGroup.add(gb);
+      genGroup.add(box(2.4, 0.12, 2.1, MAT.genDark, x, 1.95, z));
+      genGroup.add(makeLabel(`GEN ${num}`, new THREE.Vector3(x, 2.55, z), "#6ee7b7"));
+      const bus = num <= 2 ? GEN_BUS1 : GEN_BUS2;
+      cablePath([
+        new THREE.Vector3(x + (bus.x > x ? 1.2 : -1.2), 1.4, z),
+        new THREE.Vector3((x + bus.x) / 2, 1.7, (z + bus.z) / 2),
+        new THREE.Vector3(bus.x, 1.5, bus.z + (z < bus.z ? -1.2 : 1.2)),
+      ], 0.07, "gen", null, genGroup);
+    }
+
+    // G1,G2 — A side (with GEN BUS 1)
+    makeGenSet(1, -24, -19.2, "GEN BUS 1");
+    makeGenSet(2, -24, -12.8, "GEN BUS 1");
+    // G3,G4 — far side of SWGR B (with GEN BUS 2)
+    makeGenSet(3, 26, -19.2, "GEN BUS 2");
+    makeGenSet(4, 26, -12.8, "GEN BUS 2");
+
+    function makeGenBus(id, pos, gensLabel, neckRole) {
+      genGroup.add(box(3.8, 0.2, 2.8, MAT.slab, pos.x, 0.22, pos.z));
+      const body = box(3.4, 2.0, 2.2, MAT.genStandby.clone(), pos.x, 1.3, pos.z);
+      registerPower(body, "genSwgr");
+      body.userData.genBusId = id;
+      addPick(body, {
+        title: `${id} — Generator bus section`,
+        meta: "Breaker-class / gen-rated VFI · Not utility-tap PM duty",
+        body: `${gensLabel} only (no dual-home). ${id === "GEN BUS 1" ? "Sits on SWGR A side — short Neck A." : "Sits on far side of PM-SWGR B — short Neck B."} Gen-bus tie spans between the two yards for full island. Order with gen package so gear does not lag engines.`,
+        leadTime: "~40–80 weeks (MV metal-clad / gen-rated VFI lineup; switchgear market often 50–80 wks)",
+        list: [
+          "Devices: vacuum CB or gen-rated fault interrupters (study-proven kA)",
+          "Fuse-only gen mains: not permitted",
+          "One failure domain per bus section",
+          "Loss of this bus: other bus + 2 gens remain",
+          "N+1 island: size so 3 of 4 gens carry design island load",
+        ],
+      });
+      genGroup.add(body);
+      for (let i = 0; i < 3; i++) {
+        genGroup.add(box(0.9, 1.6, 0.08, matGenBus, pos.x - 1.0 + i * 1.0, 1.2, pos.z + 1.15));
+      }
+      genGroup.add(makeLabel(id, new THREE.Vector3(pos.x, 2.9, pos.z), "#5eead4"));
+      return body;
+    }
+
+    makeGenBus("GEN BUS 1", GEN_BUS1, "GEN 1 + GEN 2", "genNeckA");
+    makeGenBus("GEN BUS 2", GEN_BUS2, "GEN 3 + GEN 4", "genNeckB");
+
+    // Gen-bus tie spans A-side yard ↔ B-side yard (behind util SWGRs)
+    cablePath([
+      new THREE.Vector3(GEN_BUS1.x + 1.8, 1.6, GEN_BUS1.z),
+      new THREE.Vector3(0, 2.2, -17.5),
+      new THREE.Vector3(GEN_BUS2.x - 1.8, 1.6, GEN_BUS2.z),
+    ], 0.1, "gen", null, genGroup);
+    const tieBox = box(0.9, 0.7, 0.7, MAT.no, 0, 1.9, -17.5);
+    addPick(tieBox, {
+      title: "Gen-bus tie",
+      meta: "N.O. normal · Close for full island (P4)",
+      body: "Ties GEN BUS 1 (A side) to GEN BUS 2 (far side of SWGR B). Open in normal standby. Closed (with sync) for full island so both necks can feed A and B.",
+      leadTime: "~40–70 weeks (gen-rated breaker / VFI cell — order with gen bus lineup)",
+      list: [
+        "Fault-capable device (not load-break only)",
+        "Grid parallel: typically leave open; use one home neck",
+        "Each bus keeps a short neck to its home SWGR",
+      ],
+    });
+    genGroup.add(tieBox);
+    genGroup.add(makeLabel("GEN-BUS TIE", new THREE.Vector3(0, 2.7, -17.5), "#fca5a5"));
+
+    // Neck A: Bus1 → SWGR A (short — A side)
+    cablePath([
+      new THREE.Vector3(GEN_BUS1.x + 1.2, 1.6, GEN_BUS1.z + 0.8),
+      new THREE.Vector3(-14, 2.0, -12.5),
+      new THREE.Vector3(-11, 2.0, -11),
+    ], 0.09, "genNeckA");
+    // Neck B: Bus2 → SWGR B (short — far side of B)
+    cablePath([
+      new THREE.Vector3(GEN_BUS2.x - 1.5, 1.6, GEN_BUS2.z + 0.5),
+      new THREE.Vector3(14.5, 2.0, -12.5),
+      new THREE.Vector3(11, 2.0, -11),
+    ], 0.09, "genNeckB");
+
+    genGroup.add(makeLabel("GEN BUS 1 · A SIDE", new THREE.Vector3(-20, 0.5, -20.5), "#6ee7b7"));
+    genGroup.add(makeLabel("GEN BUS 2 · FAR SIDE OF B", new THREE.Vector3(24, 0.5, -20.5), "#6ee7b7"));
+
+    // ── Detailed PB-5 blocks ─────────────────────────────────────
+    // Scale note: 1 scene unit ≈ 1 meter (approximate). Layout is schematic but
+    // equipment footprints are closer to real-world order-of-magnitude.
+    //
+    // PM-SWGR A/B centers (must match makeSixWay calls above)
+    const SWGR_A = { x: -11, z: -10 };
+    const SWGR_B = { x: 11, z: -10 };
+    // Load-way face of pad-mount (toward IT / +Z from SWGR)
+    const SWGR_LOAD_Z = -10 + 1.05; // ≈ -8.95 front face
+    const SWGR_BUSH_Y = 2.55;
+
+    // Four block slots: A–C Phase 1 live · D future expansion (ghosted)
+    const blockXs = [-24, -8, 8, 24];
+    const blockGroups = [];
+    const blockMeta = [
+      { letter: "A", name: "Block A · PB-5", future: false },
+      { letter: "B", name: "Block B · PB-5", future: false },
+      { letter: "C", name: "Block C · PB-5", future: false },
+      { letter: "D", name: "Block D · FUTURE PB-5", future: true },
+    ];
+
+    const MAT_FUTURE = {
+      body: std(0x64748b, { metalness: 0.2, roughness: 0.75, opacity: 0.38 }),
+      accent: std(0x94a3b8, { metalness: 0.25, roughness: 0.7, opacity: 0.32 }),
+      it: std(0x475569, { metalness: 0.15, roughness: 0.8, opacity: 0.22 }),
+      floor: std(0x334155, { metalness: 0.15, roughness: 0.9, opacity: 0.35 }),
+    };
+
+    /**
+     * Geometry (meters-ish) for one path of a PB-5:
+     * - Pad-mount 3–3.75 MVA: ~2.4 L × 1.8 W × 2.2 H
+     * - 480 V SWBD section: ~1.2 W × 1.0 D × 2.3 H (one vertical section; lineup is longer in reality)
+     * - Modular UPS ~2.5 MW train: 5 modules × ~0.8 W × 1.1 D × 2.2 H ≈ 4.0 m lineup + I/O + bypass
+     * - Battery (Li-ion class, ~5–10 min @ 2.5 MW): often comparable or larger than UPS footprint
+     * - future=true: ghosted Phase-2 slot, same kit, not energized in scenarios
+     */
+    function makeDetailedBlock(x, index) {
+      const meta = blockMeta[index];
+      const { letter } = meta;
+      const isFuture = !!meta.future;
+      const g = new THREE.Group();
+      g.userData.blockIndex = index;
+      g.userData.isFuture = isFuture;
+      scene.add(g);
+      blockGroups.push(g);
+
+      const powerRole = isFuture ? "future" : null; // when set, overrides live power roles
+
+      // Path lateral offsets (A left / B right of block centerline)
+      const pathOx = [-3.2, 3.2];
+
+      // Z stations along power flow (gallery → hall)
+      const Z = {
+        xfmr: -3.2,
+        swbd: 0.6,
+        ups: 4.2,
+        batt: 7.4,
+        crit: 9.6,
+        hall: 15.2,
+      };
+
+      // Equipment sizes (W, H, D) — width along X, depth along Z
+      const XFMR = { w: 2.4, h: 2.15, d: 1.85 };
+      const SWBD = { w: 1.35, h: 2.3, d: 1.15 };
+      const UPS_MOD = { w: 0.78, h: 2.15, d: 1.05 }; // per power module
+      const UPS_N = 5; // N+1 modular frames for ~2.5 MW train
+      const UPS_IO = { w: 1.1, h: 2.15, d: 1.0 };
+      const BYPASS = { w: 1.0, h: 2.0, d: 0.9 };
+      const BATT = { w: 1.0, h: 2.2, d: 1.15 }; // Li-ion cabinet scale
+      const BATT_N = 4;
+
+      const upsLineupW = UPS_N * UPS_MOD.w + 0.15; // ~4.05 m
+
+      // Floor plate under electrical + UPS
+      const floor = box(16, 0.18, 26, isFuture ? MAT_FUTURE.floor.clone() : MAT.slab, x, 0.09, 7);
+      if (isFuture) {
+        floor.material.transparent = true;
+        floor.material.opacity = 0.3;
+      }
+      g.add(floor);
+      // Future footprint outline
+      if (isFuture) {
+        const edgeMat = new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.7 });
+        const hw = 8, hd = 13, y = 0.22;
+        const corners = [
+          new THREE.Vector3(x - hw, y, 7 - hd), new THREE.Vector3(x + hw, y, 7 - hd),
+          new THREE.Vector3(x + hw, y, 7 + hd), new THREE.Vector3(x - hw, y, 7 + hd),
+          new THREE.Vector3(x - hw, y, 7 - hd),
+        ];
+        g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(corners), edgeMat));
+      }
+      g.add(makeLabel(
+        isFuture
+          ? "BLOCK D · FUTURE PHASE · PB-5 kit · NOT ENERGIZED"
+          : meta.name + "  (~5 MW IT) · scale ≈1u=1m",
+        new THREE.Vector3(x, 5.4, Z.hall),
+        isFuture ? "#94a3b8" : "#7dd3fc"
+      ));
+
+      const matXfmr = () => (isFuture ? MAT_FUTURE.body.clone() : MAT.xfmr.clone());
+      const matXfmrTop = () => (isFuture ? MAT_FUTURE.accent.clone() : MAT.xfmrTop);
+      const matSwbd = () => (isFuture ? MAT_FUTURE.body.clone() : MAT.swbd.clone());
+      const matUps = () => (isFuture ? MAT_FUTURE.accent.clone() : MAT.upsModule.clone());
+      const matUpsCab = () => (isFuture ? MAT_FUTURE.body.clone() : MAT.ups.clone());
+      const matBatt = () => (isFuture ? MAT_FUTURE.body.clone() : MAT.batt.clone());
+      const matPdu = () => (isFuture ? MAT_FUTURE.accent.clone() : MAT.pdu.clone());
+      const matIt = () => (isFuture ? MAT_FUTURE.it.clone() : MAT.it.clone());
+      const matRack = () => (isFuture ? MAT_FUTURE.accent.clone() : MAT.itSolid);
+
+      pathOx.forEach((ox, ti) => {
+        const path = ti === 0 ? "A" : "B";
+        const px = x + ox;
+        const feedRole = isFuture ? "future" : (ti === 0 ? "feedA" : "feedB");
+        const lvRole = isFuture ? "future" : "lv";
+        const upsInRole = isFuture ? "future" : "upsIn";
+        const src = ti === 0 ? SWGR_A : SWGR_B;
+        const eqRole = isFuture ? "future" : null;
+
+        // ── Pad-mount XFMR ─────────────────────────────────────
+        const tank = box(XFMR.w, XFMR.h, XFMR.d, matXfmr(), px, XFMR.h / 2 + 0.2, Z.xfmr);
+        registerPower(tank, eqRole || "xfmr", index);
+        addPick(tank, {
+          title: isFuture
+            ? `FUTURE XFMR ${letter}-${path} (not installed)`
+            : `Pad-mount XFMR ${letter}-${path}`,
+          meta: isFuture
+            ? "Phase 2 reserved · Maddox (or equal) 3.0–3.75 MVA pad-mount when released"
+            : "13.8 kV → 480Y/277 V · ~3.0–3.75 MVA · Maddox Transformers (platform supplier)",
+          body: isFuture
+            ? `Block D is a master-plan future PB-5. Gallery spare capacity and SWGR ways reserved; gear not energized in contingency scenarios. Source pad-mount units from Maddox Transformers (or equal) at Phase 2 release.`
+            : `Path ${path} of dual primary-selective feed into Block ${letter}. MV from PM-SWGR ${path === "A" ? "A (and B alternate)" : "B (and A alternate)"} load ways. Platform pad-mount supplier: **Maddox Transformers** — quoted path supports ~**36 weeks** for standard PB-5 class units.`,
+          leadTime: isFuture
+            ? "Maddox pad-mount (3 MVA class): ~36 weeks from order at Phase 2 gate (confirm quote)"
+            : "Maddox Transformers: ~36 weeks (standard 3 MVA-class pad-mount path; confirm with quote / options)",
+          list: isFuture
+            ? [
+                "Supplier: Maddox Transformers (platform) — or equal",
+                "Same dual-path PB-5 product as A–C",
+                "Populate after pre-lease / vertical gate",
+                "MV ducts / way positions planned in Phase 1 gallery",
+                "~126 A primary FLA per 3.0 MVA when live",
+              ]
+            : [
+                "Supplier: Maddox Transformers (platform) — or equal",
+                "Indoor pad-mount, less-flammable fluid preferred",
+                "HV bushings on gallery side; LV secondary toward SWBD",
+                "Feeds 480 V SWBD " + path,
+                "Lead time ~36 weeks for standard catalog/options path — specials can extend",
+              ],
+        });
+        g.add(tank);
+        g.add(box(XFMR.w + 0.1, 0.12, XFMR.d + 0.05, matXfmrTop(), px, XFMR.h + 0.26, Z.xfmr));
+        // Radiators (side)
+        for (let r = 0; r < 5; r++) {
+          g.add(box(0.07, XFMR.h * 0.7, XFMR.d * 0.75, matXfmrTop(),
+            px - XFMR.w / 2 - 0.08, XFMR.h * 0.45, Z.xfmr - XFMR.d * 0.1 + r * 0.08));
+        }
+        // HV bushings (gallery / -Z face top)
+        const hvZ = Z.xfmr - XFMR.d / 2 + 0.15;
+        const hvY = XFMR.h + 0.15;
+        g.add(cyl(0.09, 0.35, MAT.bus, px - 0.35, hvY, hvZ));
+        g.add(cyl(0.09, 0.35, MAT.bus, px + 0.35, hvY, hvZ));
+        // LV throat toward SWBD (+Z)
+        const lvZ = Z.xfmr + XFMR.d / 2 - 0.05;
+        g.add(box(0.9, 0.55, 0.35, matXfmrTop(), px, 1.1, lvZ + 0.1));
+        g.add(makeLabel(
+          isFuture ? `FUTURE XFMR ${path}` : `XFMR ${path}`,
+          new THREE.Vector3(px, XFMR.h + 0.7, Z.xfmr),
+          isFuture ? "#94a3b8" : "#86efac"
+        ));
+
+        // MV: SWGR load-way bushing → gallery run → XFMR HV bushings
+        // Way lateral offset on 6-way face (4 block slots)
+        const wayLat = (index - 1.5) * 0.5;
+        const swgrExit = new THREE.Vector3(src.x + wayLat, SWGR_BUSH_Y, SWGR_LOAD_Z);
+        const midGallery = new THREE.Vector3(
+          (src.x + px) / 2,
+          2.35,
+          (SWGR_LOAD_Z + hvZ) / 2
+        );
+        const xfmrHv = new THREE.Vector3(px, hvY - 0.05, hvZ);
+        cablePath([swgrExit, midGallery, xfmrHv], 0.07, feedRole, index);
+
+        // ── 480 V SWBD ─────────────────────────────────────────
+        const swbd = box(SWBD.w, SWBD.h, SWBD.d, matSwbd(), px, SWBD.h / 2 + 0.15, Z.swbd);
+        registerPower(swbd, eqRole || "swbd", index);
+        addPick(swbd, {
+          title: isFuture ? `FUTURE 480 V SWBD ${letter}-${path}` : `480 V SWBD ${letter}-${path}`,
+          meta: "Main LV switchboard section · Path " + path,
+          body: isFuture
+            ? "Reserved LV main for Phase 2 PB-5 path. Not energized until block is released."
+            : "Receives pad-mount XFMR secondary. Feeds UPS input, mechanical essentials, and house as designed.",
+          leadTime: "~30–60 weeks (4000 A class LV switchboard; custom sections longer)",
+          list: ["Aligned on same centerline as XFMR " + path, "4000 A class behind 3.0 MVA", "UPS input breakers"],
+        });
+        g.add(swbd);
+        g.add(box(SWBD.w * 0.85, SWBD.h * 0.75, 0.04, MAT.slab, px, SWBD.h * 0.5, Z.swbd + SWBD.d / 2 + 0.02));
+
+        // LV secondary: XFMR LV throat → SWBD rear
+        const swbdIn = new THREE.Vector3(px, 1.15, Z.swbd - SWBD.d / 2);
+        const xfmrOut = new THREE.Vector3(px, 1.1, lvZ + 0.2);
+        const lvMid = new THREE.Vector3(px, 0.55, (xfmrOut.z + swbdIn.z) / 2);
+        cablePath([xfmrOut, lvMid, swbdIn], 0.1, lvRole, index);
+
+        // ── UPS train ──────────────────────────────────────────
+        const upsZ = Z.ups;
+        const mod0X = px - upsLineupW / 2 + UPS_MOD.w / 2;
+        g.add(box(upsLineupW + 1.4, 0.12, UPS_MOD.d + 2.8, isFuture ? MAT_FUTURE.floor.clone() : MAT.slab, px, 0.12, upsZ + 0.6));
+
+        // Shared inspector payload — every module + I/O cabinets are clickable
+        const upsInfo = {
+          title: isFuture ? `FUTURE UPS Train ${letter}-${path}` : `Modular UPS Train ${letter}-${path}`,
+          meta: `N+1 modular · ~2.5 MW train · ~${upsLineupW.toFixed(1)} m lineup · ${UPS_N} modules`,
+          body: isFuture
+            ? "Same modular UPS product as live blocks when Phase 2 goes vertical. Platform shortlist: Vertiv (primary), Eaton, Schneider Electric; alternates ABB / Mitsubishi."
+            : `Path ${path} for Block ${letter}. Multi-MW modular double-conversion UPS. Platform preferred OEM shortlist for US wholesale: Vertiv (Liebert) primary candidate; Eaton and Schneider Electric (Galaxy) competitive; ABB / Mitsubishi Electric as alternates. Pick one family campus-wide for spares, training, and DCIM. Click any module or I/O cabinet for this train.`,
+          leadTime: "Vertiv / Eaton / Schneider modular multi-MW: typically ~40–70 weeks (package). Quote-dependent; large frames can stretch.",
+          list: [
+            "Preferred shortlist: Vertiv · Eaton · Schneider Electric",
+            "Alternates: ABB MegaFlex-class · Mitsubishi 9900/9900BX-class",
+            `${UPS_N} power modules (N+1 style) · ~2.5 MW train — all modules clickable`,
+            "~0.8 m W × 1.1 m D × 2.2 m H per module (indicative)",
+            "4000 A class input/output gear · static bypass with package",
+            isFuture ? "Not in contingency power flow until released" : "Lease meter downstream at critical bus",
+            "Standardize one OEM per campus for spares / firmware / service",
+          ],
+        };
+
+        for (let m = 0; m < UPS_N; m++) {
+          const mx = mod0X + m * UPS_MOD.w;
+          const um = box(UPS_MOD.w - 0.04, UPS_MOD.h, UPS_MOD.d, matUps(), mx, UPS_MOD.h / 2 + 0.12, upsZ);
+          registerPower(um, eqRole || "ups", index);
+          addPick(um, {
+            ...upsInfo,
+            title: isFuture
+              ? `FUTURE UPS ${letter}-${path} · Module ${m + 1}/${UPS_N}`
+              : `UPS ${letter}-${path} · Module ${m + 1}/${UPS_N}`,
+          });
+          g.add(um);
+          // Vent strip — also pickable so face clicks hit UPS
+          const vent = box(UPS_MOD.w * 0.7, UPS_MOD.h * 0.5, 0.03, matUpsCab(), mx, UPS_MOD.h * 0.55, upsZ + UPS_MOD.d / 2 + 0.02);
+          vent.userData.info = um.userData.info;
+          pickables.push(vent);
+          g.add(vent);
+        }
+
+        const ioInX = mod0X - UPS_MOD.w * 0.65;
+        const ioOutX = mod0X + (UPS_N - 1) * UPS_MOD.w + UPS_MOD.w * 0.65;
+        const ioIn = box(UPS_IO.w, UPS_IO.h, UPS_IO.d, matUpsCab(), ioInX, UPS_IO.h / 2 + 0.12, upsZ);
+        const ioOut = box(UPS_IO.w, UPS_IO.h, UPS_IO.d, matUpsCab(), ioOutX, UPS_IO.h / 2 + 0.12, upsZ + 0.15);
+        registerPower(ioIn, eqRole || "ups", index);
+        registerPower(ioOut, eqRole || "ups", index);
+        addPick(ioIn, {
+          ...upsInfo,
+          title: isFuture ? `FUTURE UPS ${letter}-${path} · Input cabinet` : `UPS ${letter}-${path} · Input cabinet`,
+        });
+        addPick(ioOut, {
+          ...upsInfo,
+          title: isFuture ? `FUTURE UPS ${letter}-${path} · Output cabinet` : `UPS ${letter}-${path} · Output cabinet`,
+        });
+        g.add(ioIn);
+        g.add(ioOut);
+
+        const bp = box(BYPASS.w, BYPASS.h, BYPASS.d, isFuture ? MAT_FUTURE.accent.clone() : MAT.bypass.clone(), ioOutX, BYPASS.h / 2 + 0.12, upsZ + UPS_MOD.d + 0.55);
+        registerPower(bp, eqRole || "ups", index);
+        addPick(bp, {
+          title: isFuture ? `FUTURE Bypass ${letter}-${path}` : `Static Bypass ${letter}-${path}`,
+          meta: "Maintenance / fault bypass · full-height cabinet · same UPS OEM",
+          body: "Parallel path around inverter for maintenance or overload. Ships with the UPS lineup from the same manufacturer (Vertiv / Eaton / Schneider shortlist — not a third-party bypass).",
+          leadTime: "~40–70 weeks (included with UPS OEM package when ordered as one SKU)",
+          list: [
+            "Same OEM as modular UPS train",
+            "Vertiv · Eaton · Schneider (platform shortlist)",
+            "Coordinate integrated static bypass + maintenance bypass",
+          ],
+        });
+        g.add(bp);
+
+        const battZ = Z.batt;
+        const batt0X = px - (BATT_N * BATT.w) / 2 + BATT.w / 2;
+        const battInfo = {
+          title: isFuture ? `FUTURE Battery ${letter}-${path}` : `Battery Cabinets ${letter}-${path}`,
+          meta: `~${BATT_N} × Li-ion class cabinets · matched to UPS OEM`,
+          body: isFuture
+            ? "Battery plant reserved in Phase 2 electrical room footprint. Match chemistry/interface to selected UPS OEM."
+            : "Energy store for design runtime (e.g. 5–10 min). Prefer UPS-OEM integrated Li-ion (Vertiv / Eaton / Schneider battery cabinets or approved partners) for warranty and DC interface.",
+          leadTime: "~20–50 weeks (Li-ion with UPS package); VRLA multi-MW strings often longer",
+          list: [
+            "Prefer same brand family as UPS (or OEM-approved battery partner)",
+            "Sized for gen start + retransfer (5–10 min class)",
+            "Large footprint at multi-MW",
+            "Order with UPS for matched DC interface / BMS",
+            "Any cabinet in the row is clickable",
+          ],
+        };
+        for (let b = 0; b < BATT_N; b++) {
+          const bx = batt0X + b * (BATT.w + 0.08);
+          const batt = box(BATT.w, BATT.h, BATT.d, matBatt(), bx, BATT.h / 2 + 0.12, battZ);
+          registerPower(batt, eqRole || "batt", index);
+          addPick(batt, {
+            ...battInfo,
+            title: isFuture
+              ? `FUTURE Battery ${letter}-${path} · Cab ${b + 1}/${BATT_N}`
+              : `Battery ${letter}-${path} · Cab ${b + 1}/${BATT_N}`,
+          });
+          g.add(batt);
+        }
+
+        g.add(makeLabel(
+          isFuture ? `FUTURE UPS ${path}` : `UPS ${path} ~2.5 MW · ${UPS_N} mod · batt row`,
+          new THREE.Vector3(px, UPS_MOD.h + 0.85, upsZ),
+          isFuture ? "#94a3b8" : "#c4b5fd"
+        ));
+
+        const swbdOut = new THREE.Vector3(px, 1.4, Z.swbd + SWBD.d / 2);
+        const upsInPt = new THREE.Vector3(ioInX, 1.4, upsZ - UPS_IO.d / 2);
+        const midSwUps = new THREE.Vector3(px, 1.55, (swbdOut.z + upsInPt.z) / 2);
+        cablePath([
+          swbdOut,
+          midSwUps,
+          new THREE.Vector3(ioInX, 1.45, midSwUps.z + 0.3),
+          upsInPt,
+        ], 0.09, upsInRole, index);
+
+        if (!g.userData.upsOutPts) g.userData.upsOutPts = [];
+        g.userData.upsOutPts.push(new THREE.Vector3(ioOutX, 1.5, bp.position.z + BYPASS.d / 2));
+      });
+
+      g.add(makeLabel(
+        isFuture ? "FUTURE 480 V SWBD" : "480 V SWBD A/B",
+        new THREE.Vector3(x, 2.9, Z.swbd),
+        isFuture ? "#94a3b8" : "#a5b4fc"
+      ));
+
+      const crit = box(10.5, 2.0, 1.2, matPdu(), x, 1.15, Z.crit);
+      registerPower(crit, isFuture ? "future" : "crit", index);
+      addPick(crit, {
+        title: isFuture ? `FUTURE Critical Bus ${letter}` : `Critical Bus / PDU ${letter}`,
+        meta: isFuture ? "Future lease meter boundary" : "Lease metering boundary · Take-or-pay IT kW",
+        body: isFuture
+          ? "When live: same dual-fed critical bus and wholesale meter point as Blocks A–C."
+          : "Combines UPS train outputs to busway/PDU distribution. Revenue metering and EPMS CTs included in design.",
+        leadTime: "~25–50 weeks (critical bus / PDU lineup); busway ~20–40 weeks",
+        list: ["~6000 A class combined / 4000 A per path planning", "Busway into white space", "Metering class CTs can add submittal time"],
+      });
+      g.add(crit);
+      for (let s = -2; s <= 2; s++) {
+        g.add(box(0.04, 1.6, 1.15, MAT.slab, x + s * 2.0, 1.15, Z.crit));
+      }
+      g.add(makeLabel(
+        isFuture ? "FUTURE CRITICAL BUS" : "CRITICAL BUS · LEASE METER",
+        new THREE.Vector3(x, 2.5, Z.crit),
+        isFuture ? "#94a3b8" : "#c4b5fd"
+      ));
+
+      const outRole = isFuture ? "future" : "upsOut";
+      pathOx.forEach((ox, ti) => {
+        const outPts = g.userData.upsOutPts;
+        const start = outPts && outPts[ti]
+          ? outPts[ti]
+          : new THREE.Vector3(x + ox, 1.5, Z.ups + 1.5);
+        const end = new THREE.Vector3(x + ox * 0.45, 1.4, Z.crit - 0.65);
+        const mid = new THREE.Vector3(start.x, 1.7, (start.z + end.z) / 2);
+        cablePath([start, mid, end], 0.1, outRole, index);
+      });
+
+      g.add(box(11, 0.15, 0.28, MAT.bus, x, 2.85, Z.hall - 3.2));
+      g.add(box(11, 0.15, 0.28, MAT.bus, x, 2.85, Z.hall - 1.0));
+      cablePath([
+        new THREE.Vector3(x, 1.9, Z.crit + 0.65),
+        new THREE.Vector3(x, 2.7, Z.crit + 1.8),
+        new THREE.Vector3(x, 2.85, Z.hall - 3.2),
+      ], 0.11, isFuture ? "future" : "busway", index);
+
+      const hall = box(13, 3.4, 10, matIt(), x, 1.85, Z.hall);
+      if (isFuture) {
+        hall.material.transparent = true;
+        hall.material.opacity = 0.2;
+      }
+      registerPower(hall, isFuture ? "future" : "it", index);
+      addPick(hall, {
+        title: isFuture ? `FUTURE IT Hall ${letter}` : `IT White Space ${letter}`,
+        meta: isFuture ? "Phase 2 white space · ~5 MW IT when released" : "PB-5 · ~4.5–5.0 MW IT",
+        body: isFuture
+          ? "Master-plan expansion hall. Same wholesale product as A–C. Shell/ducts may be prepared early; fit-out after pre-lease gate."
+          : "Wholesale hall. UPS room is a large fraction of electrical real estate for multi-MW. Density: 150–250 W/ft² enterprise; AI option 400–800 W/ft²; racks 8–15 kW / AI 40–80 kW.",
+        leadTime: isFuture
+          ? "Shell: with civil package · Electrical fit-out: long-lead gear as quoted after Phase 2 release"
+          : "Shell / white space: construction schedule (often 12–24+ mo site) · Busway/PDU ~20–40 wks · Racks tenant-driven",
+        list: isFuture
+          ? ["Ghosted — not in live power scenarios", "Same PB-5 dual-path electrical kit", "Adds ~5 MW IT to campus when live"]
+          : ["Standard sellable module", "Racks ~0.6×1.2 m · 2 m H", "IT density planning in SLD / design notes"],
+      });
+      g.add(hall);
+
+      for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 8; col++) {
+          g.add(box(0.6, 2.0, 1.1, matRack(),
+            x - 4.6 + col * 1.15,
+            1.1,
+            Z.hall - 3.4 + row * 1.85));
+        }
+      }
+      g.add(makeLabel(
+        isFuture ? "FUTURE WHITE SPACE" : "IT RACKS · BUSWAY",
+        new THREE.Vector3(x, 4.0, Z.hall),
+        isFuture ? "#94a3b8" : "#7dd3fc"
+      ));
+
+      // Ghost opacity pass for future block meshes
+      if (isFuture) {
+        g.traverse((obj) => {
+          if (obj.isMesh && obj.material) {
+            const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+            mats.forEach((m) => {
+              m.transparent = true;
+              if (m.opacity === undefined || m.opacity > 0.45) m.opacity = 0.36;
+            });
+          }
+        });
+      }
+
+      return g;
+    }
+
+    blockXs.forEach((x, i) => makeDetailedBlock(x, i));
+
+    // ── Scenario logic ───────────────────────────────────────────
+    function scenarioFlags(sc, p3Phase = 0) {
+      const f = {
+        util1: true,
+        util2: true,
+        gen: false,
+        genNeckA: false,
+        genNeckB: false,
+        tie: false,
+        swgrA: true,
+        swgrB: true,
+        blocksLive: true,
+        upsOnBattery: false,
+        gensStarting: false,
+        banner: "",
+        bannerClass: "",
+        upsMode: "DOUBLE-CONVERT",
+        genLabel: "STANDBY",
+      };
+
+      if (sc === "normal") {
+        f.banner = "NORMAL: Util1 + Util2 → SWGR A/B · A–B N.O. open · Gens standby · Dual XFMR → UPS double-convert → IT";
+        f.bannerClass = "";
+      } else if (sc === "drop1") {
+        f.util1 = false;
+        f.gen = true;
+        f.genNeckA = true;
+        f.swgrA = true;
+        f.upsOnBattery = true;
+        f.genLabel = "RUNNING → NECK A";
+        f.upsMode = "BATT→RETRANSFER";
+        f.banner = "DROP UTIL1: Feed 2 on SWGR B · Gens → neck A · UPS brief battery then retransfer · A–B N.O. stays OPEN";
+        f.bannerClass = "single";
+      } else if (sc === "drop2") {
+        f.util2 = false;
+        f.gen = true;
+        f.genNeckB = true;
+        f.swgrB = true;
+        f.upsOnBattery = true;
+        f.genLabel = "RUNNING → NECK B";
+        f.upsMode = "BATT→RETRANSFER";
+        f.banner = "DROP UTIL2: Feed 1 on SWGR A · Gens → neck B · UPS bridges · primary-selective loads stay up";
+        f.bannerClass = "single";
+      } else if (sc === "island_bridge") {
+        // Both utils dead, gens NOT yet closed — pure UPS bridge + countdown
+        f.util1 = false;
+        f.util2 = false;
+        f.swgrA = false;
+        f.swgrB = false;
+        f.gen = true; // cranking
+        f.gensStarting = true;
+        f.genNeckA = false;
+        f.genNeckB = false;
+        f.upsOnBattery = true;
+        f.blocksLive = true; // IT via UPS only
+        f.genLabel = "STARTING…";
+        f.upsMode = "BATTERY DISCHARGE";
+        f.banner = "BOTH UTILS LOST: MV dark · Gens cranking · UPS on battery (countdown) · IT held on critical bus · A–B tie OPEN";
+        f.bannerClass = "fail";
+      } else if (sc === "island") {
+        f.util1 = false;
+        f.util2 = false;
+        f.gen = true;
+        f.genNeckA = true;
+        f.genNeckB = true;
+        f.swgrA = true;
+        f.swgrB = true;
+        f.upsOnBattery = false;
+        f.genLabel = "ISLAND P4 · ISOCHRONOUS";
+        f.upsMode = "GEN-BACKED INPUT";
+        f.banner = "ISLAND (P4): Gens online · necks feed A+B · UPS retransfers off battery · IT on gen-backed double-convert";
+        f.bannerClass = "island";
+      } else if (sc === "restore") {
+        // Soft return: gens still on, utils coming back, brief parallel feel then normal-ish
+        f.util1 = true;
+        f.util2 = true;
+        f.gen = true;
+        f.genNeckA = true;
+        f.genNeckB = false;
+        f.swgrA = true;
+        f.swgrB = true;
+        f.genLabel = "PARALLEL→STANDBY";
+        f.upsMode = "UTIL INPUT";
+        f.banner = "RESTORE: Utils healthy · Sync/soft return (P3 reverse) · Unload gens · Return to dual-feed normal";
+        f.bannerClass = "single";
+      } else if (sc === "p3") {
+        if (p3Phase < 0.22) {
+          f.banner = "P3 STEP 1/4: Both utilities healthy · Command soft transfer to gens · UPS normal";
+          f.genLabel = "STARTING…";
+        } else if (p3Phase < 0.42) {
+          f.gen = true;
+          f.banner = "P3 STEP 2/4: Gens up · Auto-sync to Bus A · 25 permissive pending · UPS still on util";
+          f.genLabel = "SYNCING TO A";
+          f.bannerClass = "single";
+        } else if (p3Phase < 0.62) {
+          f.gen = true;
+          f.genNeckA = true;
+          f.util1 = true;
+          f.banner = "P3 STEP 3/4: BRIEF PARALLEL — Gen neck + Util1 on A · Soft load transfer · Then open util";
+          f.genLabel = "PARALLEL (BRIEF)";
+          f.upsMode = "DOUBLE-CONVERT";
+          f.bannerClass = "single";
+        } else {
+          f.util1 = false;
+          f.util2 = false;
+          f.gen = true;
+          f.genNeckA = true;
+          f.genNeckB = true;
+          f.swgrA = true;
+          f.swgrB = true;
+          f.banner = "P3 STEP 4/4: Utilities open · Campus on gens (island) · UPS gen-backed input";
+          f.genLabel = "ISLAND AFTER P3";
+          f.upsMode = "GEN-BACKED";
+          f.bannerClass = "island";
+        }
+      }
+      return f;
+    }
+
+    function formatMMSS(sec) {
+      const s = Math.max(0, Math.ceil(sec));
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return `${m}:${r.toString().padStart(2, "0")}`;
+    }
+
+    function updateUpsHud(flags) {
+      const hud = document.getElementById("ups-hud");
+      const timeEl = document.getElementById("ups-time");
+      const sub = document.getElementById("ups-hud-sub");
+      const bar = document.getElementById("ups-bar");
+      const fill = document.getElementById("ups-bar-fill");
+      const stBatt = document.getElementById("st-batt");
+
+      const frac = state.upsRemainingSec / UPS_DESIGN_SEC;
+      const show =
+        state.upsDischarging ||
+        flags.upsOnBattery ||
+        flags.upsMode === "BATTERY DISCHARGE" ||
+        (flags.gensStarting && !flags.genNeckA);
+
+      if (show || (state.scenario === "island" && frac < 0.99)) {
+        hud.classList.add("visible");
+      } else if (state.scenario === "normal" || state.scenario === "restore") {
+        // hide when fully healthy unless still recovering display
+        if (frac >= 0.98 && !state.upsDischarging) hud.classList.remove("visible");
+        else hud.classList.add("visible");
+      } else {
+        hud.classList.toggle("visible", state.upsDischarging || frac < 0.99);
+      }
+
+      timeEl.textContent = formatMMSS(state.upsRemainingSec);
+      timeEl.className = "hud-time";
+      if (frac <= 0.25) timeEl.classList.add("low");
+      else if (frac <= 0.5) timeEl.classList.add("mid");
+
+      fill.style.transform = `scaleX(${Math.max(0, Math.min(1, frac))})`;
+      bar.classList.toggle("discharging", state.upsDischarging);
+
+      hud.classList.toggle("critical", state.upsDischarging && frac <= 0.3);
+      hud.classList.toggle("ok-border", !state.upsDischarging && frac > 0.5);
+
+      if (state.upsDischarging) {
+        const etaGen = Math.max(0, GEN_START_REAL_SEC - state.dualOutageTimer);
+        sub.textContent = flags.gensStarting
+          ? `Discharging · gens starting (~${etaGen.toFixed(1)}s viz) · design autonomy ${formatMMSS(state.upsRemainingSec)} left · IT on critical bus`
+          : `Discharging on battery · design autonomy ${formatMMSS(state.upsRemainingSec)} remaining`;
+        stBatt.textContent = formatMMSS(state.upsRemainingSec);
+        stBatt.className = "tag tag-off";
+      } else if (flags.gen && (flags.genNeckA || flags.genNeckB) && frac < 0.99) {
+        sub.textContent = `Gens online · UPS retransfer complete · batteries charging / recovering · ${formatMMSS(state.upsRemainingSec)} design equivalent`;
+        stBatt.textContent = "RECOVER";
+        stBatt.className = "tag tag-gen";
+      } else {
+        sub.textContent = "Indicative 8:00 design autonomy at load · countdown accelerates in viz while both utils are down before gen close";
+        stBatt.textContent = frac >= 0.98 ? "FULL" : formatMMSS(state.upsRemainingSec);
+        stBatt.className = "tag tag-ups";
+      }
+
+      if (state.upsRemainingSec <= 0 && state.upsDischarging) {
+        sub.textContent = "⚠ DESIGN RUNTIME EXPIRED — gens must already be online · SLA breach in real ops";
+        timeEl.textContent = "0:00";
+      }
+    }
+
+    function setScenario(sc, { fromStory = false } = {}) {
+      state.scenario = sc;
+      state.p3Playing = sc === "p3";
+      if (sc === "p3") state.p3Phase = 0;
+
+      // Battery / outage bookkeeping
+      if (sc === "normal") {
+        state.upsRemainingSec = UPS_DESIGN_SEC;
+        state.upsDischarging = false;
+        state.dualOutageTimer = 0;
+        state.gensClosedAfterOutage = false;
+      } else if (sc === "island_bridge") {
+        state.upsDischarging = true;
+        state.dualOutageTimer = 0;
+        state.gensClosedAfterOutage = false;
+        // keep remaining if mid-story; else start from full
+        if (!fromStory || state.storyStep === 0) state.upsRemainingSec = UPS_DESIGN_SEC;
+      } else if (sc === "island") {
+        state.upsDischarging = false;
+        state.gensClosedAfterOutage = true;
+      } else if (sc === "drop1" || sc === "drop2") {
+        // brief battery use — small dip then recover in tick
+        state.upsDischarging = true;
+      } else if (sc === "restore") {
+        state.upsDischarging = false;
+      }
+
+      if (!fromStory) {
+        state.storyPlaying = false;
+        state.storyPaused = false;
+        document.getElementById("btn-story-play")?.classList.remove("story-active");
+        document.getElementById("btn-story-play-2")?.classList.remove("story-active");
+        document.getElementById("story-step-label").innerHTML =
+          `Manual: <strong>${sc}</strong><em>Press ▶ Play story for auto sequence</em>`;
+      }
+
+      document.querySelectorAll(".scenario-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.sc === sc || (sc === "island_bridge" && b.dataset.sc === "island"));
+      });
+      applyBlockFocus();
+    }
+
+    function updateStoryUi() {
+      const fill = document.getElementById("story-progress-fill");
+      const label = document.getElementById("story-step-label");
+      if (!state.storyPlaying && !state.storyPaused) {
+        fill.style.width = "0%";
+        return;
+      }
+      const step = STORY[state.storyStep];
+      if (!step) return;
+      const frac = Math.min(1, state.storyStepTimer / step.duration);
+      const overall = (state.storyStep + frac) / STORY.length;
+      fill.style.width = `${(overall * 100).toFixed(1)}%`;
+      label.innerHTML = `${step.label}<em>${step.detail}</em>`;
+    }
+
+    function startStory() {
+      state.storyPlaying = true;
+      state.storyPaused = false;
+      state.storyStep = 0;
+      state.storyStepTimer = 0;
+      state.upsRemainingSec = UPS_DESIGN_SEC;
+      document.getElementById("btn-story-play").classList.add("story-active");
+      document.getElementById("btn-story-play-2").classList.add("story-active");
+      setScenario(STORY[0].scenario, { fromStory: true });
+      updateStoryUi();
+    }
+
+    function pauseStory() {
+      if (!state.storyPlaying && !state.storyPaused) return;
+      state.storyPlaying = false;
+      state.storyPaused = true;
+      document.getElementById("btn-story-play").classList.remove("story-active");
+      document.getElementById("btn-story-play-2").classList.remove("story-active");
+      document.getElementById("story-step-label").innerHTML =
+        `Paused — ${STORY[state.storyStep]?.label || ""}<em>Press ▶ Play story to resume from start, or pick a scenario</em>`;
+    }
+
+    function advanceStory(dt) {
+      if (!state.storyPlaying || state.storyPaused) return;
+      state.storyStepTimer += dt;
+      const step = STORY[state.storyStep];
+      if (!step) {
+        state.storyPlaying = false;
+        return;
+      }
+      // Ensure scenario matches step
+      if (state.scenario !== step.scenario) {
+        setScenario(step.scenario, { fromStory: true });
+      }
+      updateStoryUi();
+      if (state.storyStepTimer >= step.duration) {
+        state.storyStep += 1;
+        state.storyStepTimer = 0;
+        if (state.storyStep >= STORY.length) {
+          state.storyPlaying = false;
+          document.getElementById("btn-story-play").classList.remove("story-active");
+          document.getElementById("btn-story-play-2").classList.remove("story-active");
+          document.getElementById("story-step-label").innerHTML =
+            `Complete · campus restored<em>Press Restart or ▶ Play story to run again</em>`;
+          setScenario("normal", { fromStory: true });
+          state.upsRemainingSec = UPS_DESIGN_SEC;
+          state.upsDischarging = false;
+          return;
+        }
+        setScenario(STORY[state.storyStep].scenario, { fromStory: true });
+      }
+    }
+
+    function tickUpsBattery(dt, flags) {
+      const bothUtilsOut = !flags.util1 && !flags.util2;
+      const genBacked = flags.gen && (flags.genNeckA || flags.genNeckB);
+
+      if (bothUtilsOut && !genBacked) {
+        // Pure bridge — discharge
+        state.upsDischarging = true;
+        state.dualOutageTimer += dt;
+        state.upsRemainingSec = Math.max(0, state.upsRemainingSec - dt * UPS_BURN_RATE);
+      } else if ((flags.scenario === "drop1" || state.scenario === "drop1" || state.scenario === "drop2") && flags.upsOnBattery && !genBacked) {
+        state.upsDischarging = true;
+        state.upsRemainingSec = Math.max(0, state.upsRemainingSec - dt * UPS_BURN_RATE * 0.35);
+      } else if (genBacked || flags.util1 || flags.util2) {
+        // Recover / charge indication
+        if (state.upsDischarging && genBacked) {
+          state.upsDischarging = false;
+        }
+        if (!state.upsDischarging && state.upsRemainingSec < UPS_DESIGN_SEC) {
+          // recover faster once input restored
+          state.upsRemainingSec = Math.min(UPS_DESIGN_SEC, state.upsRemainingSec + dt * UPS_BURN_RATE * 0.55);
+        }
+        if (state.scenario === "drop1" || state.scenario === "drop2") {
+          // after gen neck, stop discharge
+          if (genBacked) state.upsDischarging = false;
+        }
+      }
+
+      updateUpsHud(flags);
+    }
+
+    function matForRole(role, flags) {
+      const live = MAT.cableUtil;
+      const gen = MAT.cableGen;
+      const dead = MAT.cableDead;
+      const ups = MAT.cableUps;
+
+      switch (role) {
+        case "util1": return flags.util1 ? live : dead;
+        case "util2": return flags.util2 ? live : dead;
+        case "tie": return flags.tie ? live : dead;
+        case "gen":
+        case "genSwgr":
+        case "genNeckA": return flags.gen && (role !== "genNeckA" || flags.genNeckA) ? gen : dead;
+        case "genNeckB": return flags.gen && flags.genNeckB ? gen : dead;
+        case "feedA": return (flags.swgrA || flags.genNeckA) ? (flags.util1 && !flags.gen ? live : (flags.gen ? gen : live)) : dead;
+        case "feedB": return (flags.swgrB || flags.genNeckB) ? (flags.util2 && !flags.gen ? live : (flags.gen ? gen : live)) : dead;
+        case "lv":
+        case "upsIn":
+        case "upsOut":
+        case "busway":
+        case "crit": return flags.blocksLive ? ups : dead;
+        default: return live;
+      }
+    }
+
+    // Refine feed colors
+    function cableMaterial(role, flags) {
+      if (role === "util1") return flags.util1 ? MAT.cableUtil : MAT.cableDead;
+      if (role === "util2") return flags.util2 ? MAT.cableUtil : MAT.cableDead;
+      if (role === "tie") return flags.tie ? MAT.cableUtil : MAT.cableDead;
+      if (role === "gen" || role === "genSwgr") return flags.gen ? MAT.cableGen : MAT.cableDead;
+      if (role === "genNeckA") return flags.gen && flags.genNeckA ? MAT.cableGen : MAT.cableDead;
+      if (role === "genNeckB") return flags.gen && flags.genNeckB ? MAT.cableGen : MAT.cableDead;
+      if (role === "feedA") {
+        if (!flags.swgrA && !flags.genNeckA) return MAT.cableDead;
+        if (flags.gen && flags.genNeckA) return MAT.cableGen;
+        if (flags.util1) return MAT.cableUtil;
+        return MAT.cableDead;
+      }
+      if (role === "feedB") {
+        if (!flags.swgrB && !flags.genNeckB) return MAT.cableDead;
+        if (flags.gen && flags.genNeckB) return MAT.cableGen;
+        if (flags.util2) return MAT.cableUtil;
+        return MAT.cableDead;
+      }
+      if (role === "future") return MAT.cableDead;
+      if (["lv", "upsIn", "upsOut", "busway"].includes(role)) {
+        // Pure UPS bridge: XFMR→SWBD→UPS input dark; UPS output→critical→busway live
+        const noMv = !flags.util1 && !flags.util2 && !flags.genNeckA && !flags.genNeckB;
+        if (noMv && (role === "lv" || role === "upsIn")) return MAT.cableDead;
+        return flags.blocksLive ? MAT.cableUps : MAT.cableDead;
+      }
+      return MAT.cableUtil;
+    }
+
+    function meshMaterial(role, flags) {
+      if (role === "future") return MAT_FUTURE.body;
+      if (role === "util1") return flags.util1 ? MAT.utilLive : MAT.utilDead;
+      if (role === "util2") return flags.util2 ? MAT.utilLive : MAT.utilDead;
+      if (role === "swgrA") return (flags.util1 || flags.genNeckA) ? MAT.swLive : MAT.swDead;
+      if (role === "swgrB") return (flags.util2 || flags.genNeckB) ? MAT.swLive : MAT.swDead;
+      if (role === "gen" || role === "genSwgr") {
+        if (flags.gensStarting && !flags.genNeckA && !flags.genNeckB) {
+          // cranking — amber-green standby pulse via live mat slightly
+          return MAT.genLive;
+        }
+        return flags.gen ? MAT.genLive : MAT.genStandby;
+      }
+      if (role === "xfmr" || role === "swbd") {
+        // During pure UPS bridge, MV/LV upstream of UPS is dark
+        if (flags.upsOnBattery && !flags.util1 && !flags.util2 && !flags.genNeckA && !flags.genNeckB) {
+          return role === "xfmr" || role === "swbd" ? MAT.swDead : MAT.xfmr;
+        }
+        return flags.blocksLive ? (role === "swbd" ? MAT.swbd : MAT.xfmr) : MAT.swDead;
+      }
+      if (role === "ups" || role === "batt" || role === "crit") return flags.blocksLive ? MAT.ups : MAT.swDead;
+      if (role === "it") return flags.blocksLive ? MAT.it : MAT.swDead;
+      return null;
+    }
+
+    function applyScenario() {
+      const flags = scenarioFlags(state.scenario, state.p3Phase);
+
+      // Cables
+      cableEntries.forEach(({ mesh, role }) => {
+        const m = cableMaterial(role, flags);
+        mesh.material = m;
+        // Dim dead cables
+        mesh.material.opacity = m === MAT.cableDead ? 0.35 : 1;
+        mesh.material.transparent = m === MAT.cableDead;
+      });
+
+      // Power meshes
+      powerMeshes.forEach(({ mesh, role }) => {
+        const m = meshMaterial(role, flags);
+        if (!m) return;
+        // For transparent IT keep opacity
+        if (role === "it") {
+          mesh.material = m.clone();
+          mesh.material.transparent = true;
+          mesh.material.opacity = flags.blocksLive ? 0.45 : 0.15;
+        } else if (role === "ups" || role === "batt") {
+          mesh.material = m.clone();
+          if (flags.upsOnBattery && (role === "batt" || role === "ups")) {
+            mesh.material.emissive = new THREE.Color(0x6d28d9);
+            mesh.material.emissiveIntensity = 0.45;
+          }
+        } else {
+          mesh.material = m;
+        }
+      });
+
+      // Flow particles visibility by role
+      rebuildFlow(flags);
+
+      // UI status
+      const setTag = (id, text, cls) => {
+        const el = document.getElementById(id);
+        el.textContent = text;
+        el.className = "tag " + cls;
+      };
+      setTag("st-u1", flags.util1 ? "ON" : "OFF", flags.util1 ? "tag-on" : "tag-off");
+      setTag("st-u2", flags.util2 ? "ON" : "OFF", flags.util2 ? "tag-on" : "tag-off");
+      setTag("st-tie", flags.tie ? "CLOSED" : "OPEN", flags.tie ? "tag-on" : "tag-off");
+      setTag("st-gen", flags.genLabel, flags.gen ? "tag-gen" : "tag-off");
+      setTag("st-ups", flags.upsMode, "tag-ups");
+      setTag("st-it", flags.blocksLive ? "POWERED" : "DOWN", flags.blocksLive ? "tag-on" : "tag-off");
+
+      const banner = document.getElementById("flow-banner");
+      banner.textContent = flags.banner;
+      banner.className = "";
+      banner.id = "flow-banner";
+      if (flags.bannerClass) banner.classList.add(flags.bannerClass);
+
+      updateUpsHud(flags);
+    }
+
+    function rebuildFlow(flags) {
+      // Clear old particles
+      flowParticles.forEach((p) => scene.remove(p.mesh));
+      flowParticles.length = 0;
+      if (!state.flowOn) return;
+
+      const geo = new THREE.SphereGeometry(0.12, 8, 8);
+      const addOnCurve = (curve, role, color, speed = 0.1) => {
+        if (!curve) return;
+        // skip dead roles
+        const matCheck = cableMaterial(role, flags);
+        if (matCheck === MAT.cableDead) return;
+        const mat = new THREE.MeshStandardMaterial({
+          color, emissive: color, emissiveIntensity: 0.9,
+        });
+        for (let i = 0; i < 4; i++) {
+          const mesh = new THREE.Mesh(geo, mat);
+          scene.add(mesh);
+          flowParticles.push({ mesh, curve, t: i / 4, speed, role });
+        }
+      };
+
+      cableEntries.forEach(({ curve, role }) => {
+        let color = 0xfbbf24;
+        if (role.startsWith("gen") || role === "genNeckA" || role === "genNeckB") color = 0x34d399;
+        if (["lv", "upsIn", "upsOut", "busway"].includes(role)) color = 0xa78bfa;
+        if (role === "tie") color = 0x64748b;
+        addOnCurve(curve, role, color);
+      });
+    }
+
+    // ── Focus block ──────────────────────────────────────────────
+    function applyBlockFocus() {
+      const fb = state.focusBlock;
+      blockGroups.forEach((g, i) => {
+        const on = fb === "all" || String(i) === String(fb);
+        g.traverse((obj) => {
+          if (obj.isMesh) {
+            obj.material = obj.material.clone ? obj.material : obj.material;
+            if (obj.material && obj.material.opacity !== undefined && obj.userData.skipFocus) return;
+          }
+        });
+        g.visible = true;
+        g.traverse((obj) => {
+          if (obj.isMesh && obj.material) {
+            // dim non-focused
+            if (!on && fb !== "all") {
+              if (!obj.userData._origOp) obj.userData._origOp = obj.material.opacity ?? 1;
+              obj.material.transparent = true;
+              obj.material.opacity = 0.12;
+            } else if (obj.userData._origOp != null) {
+              obj.material.opacity = obj.userData._origOp;
+            }
+          }
+        });
+      });
+      // Also dim/show gen relative? keep gen visible always
+      applyScenario(); // re-apply power mats after focus dim — order issue
+
+      // Re-do focus after scenario so scenario colors win on focused
+      if (fb !== "all") {
+        blockGroups.forEach((g, i) => {
+          const on = String(i) === String(fb);
+          g.traverse((obj) => {
+            if (obj.isMesh && obj.material) {
+              if (!on) {
+                obj.material.transparent = true;
+                obj.material.opacity = Math.min(obj.material.opacity ?? 1, 0.14);
+              }
+            }
+          });
+        });
+      }
+
+      const blurbs = {
+        all: "Blocks A–C live (~15 MW IT). Block D future PB-5 (ghosted, +5 MW when released). Gallery/SWGR ways reserved. Scale ≈1 m/unit.",
+        0: "Block A: live. SWGR→XFMR→SWBD→UPS (~2.5 MW/path)→critical bus. In contingency scenarios.",
+        1: "Block B: live. Same dual-path product as A.",
+        2: "Block C: live. Same dual-path product as A/B.",
+        3: "Block D FUTURE: same PB-5 kit, not energized. Master-plan expansion after pre-lease / vertical gate. Does not participate in util-drop power flow.",
+      };
+      document.getElementById("block-blurb").textContent = blurbs[fb] || blurbs.all;
+    }
+
+    // ── UI bindings ──────────────────────────────────────────────
+    document.querySelectorAll(".scenario-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        let sc = btn.dataset.sc;
+        // Island button: if not in story, jump to full island (gens already on)
+        // Hold shift? skip — use island for gens on; story uses bridge first
+        setScenario(sc, { fromStory: false });
+      });
+    });
+
+    document.getElementById("btn-story-play").onclick = () => startStory();
+    document.getElementById("btn-story-play-2").onclick = () => startStory();
+    document.getElementById("btn-story-pause").onclick = () => pauseStory();
+    document.getElementById("btn-story-restart").onclick = () => startStory();
+
+    document.querySelectorAll(".block-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".block-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        state.focusBlock = btn.dataset.block;
+        applyBlockFocus();
+        if (btn.dataset.block !== "all") {
+          const i = Number(btn.dataset.block);
+          animateCamera("block", blockXs[i]);
+        }
+      });
+    });
+
+    document.getElementById("btn-flow").onclick = (e) => {
+      state.flowOn = !state.flowOn;
+      e.currentTarget.classList.toggle("active", state.flowOn);
+      applyScenario();
+    };
+    document.getElementById("btn-labels").onclick = (e) => {
+      state.labelsOn = !state.labelsOn;
+      labels.forEach((l) => { l.visible = state.labelsOn; });
+      e.currentTarget.classList.toggle("active", state.labelsOn);
+    };
+    document.getElementById("btn-play-p3").onclick = () => {
+      setScenario("p3", { fromStory: false });
+      state.p3Playing = true;
+      state.p3Phase = 0;
+    };
+
+    const presets = {
+      iso: { pos: new THREE.Vector3(36, 34, 48), target: new THREE.Vector3(2, 2, 0) },
+      top: { pos: new THREE.Vector3(2, 72, 0.2), target: new THREE.Vector3(2, 0, -2) },
+      ups: { pos: new THREE.Vector3(8, 10, 14), target: new THREE.Vector3(0, 1.5, 5) },
+      gen: { pos: new THREE.Vector3(32, 24, -6), target: new THREE.Vector3(20, 1.5, -15) },
+    };
+
+    function animateCamera(name, blockX) {
+      let to;
+      if (name === "block") {
+        to = { pos: new THREE.Vector3(blockX + 14, 12, 18), target: new THREE.Vector3(blockX, 1.5, 6) };
+      } else {
+        to = presets[name];
+      }
+      const fromP = camera.position.clone();
+      const fromT = controls.target.clone();
+      const t0 = performance.now();
+      (function step() {
+        const t = Math.min(1, (performance.now() - t0) / 800);
+        const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        camera.position.lerpVectors(fromP, to.pos, e);
+        controls.target.lerpVectors(fromT, to.target, e);
+        if (t < 1) requestAnimationFrame(step);
+      })();
+    }
+
+    function setViewBtn(id) {
+      ["btn-iso", "btn-top", "btn-block", "btn-ups"].forEach((b) => {
+        const el = document.getElementById(b);
+        if (el) el.classList.toggle("active", b === id);
+      });
+    }
+    document.getElementById("btn-iso").onclick = () => { setViewBtn("btn-iso"); animateCamera("iso"); };
+    document.getElementById("btn-top").onclick = () => { setViewBtn("btn-top"); animateCamera("top"); };
+    document.getElementById("btn-block").onclick = () => {
+      setViewBtn("btn-block");
+      const i = state.focusBlock === "all" ? 0 : Number(state.focusBlock);
+      animateCamera("block", blockXs[i]);
+    };
+    document.getElementById("btn-ups").onclick = () => { setViewBtn("btn-ups"); animateCamera("ups"); };
+
+    // Picking
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const inspector = document.getElementById("inspector");
+    let highlighted = null;
+    const hlMat = std(0xffffff, { emissive: 0x38bdf8, ei: 0.4 });
+
+    renderer.domElement.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(pickables.filter((m) => {
+        let o = m;
+        while (o) { if (o.visible === false) return false; o = o.parent; }
+        return true;
+      }), false);
+      if (highlighted) {
+        // can't easily restore — re-apply scenario
+        highlighted = null;
+        applyBlockFocus();
+      }
+      if (hits.length) {
+        const obj = hits[0].object;
+        highlighted = obj;
+        obj.material = hlMat;
+        const info = obj.userData.info;
+        if (!info) return;
+        showInspector(info);
+      } else inspector.classList.remove("visible");
+    });
+
+    function resize() {
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      labelRenderer.setSize(w, h);
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    // Init
+    applyBlockFocus();
+    updateUpsHud(scenarioFlags(state.scenario, state.p3Phase));
+
+    let last = performance.now();
+    let lastScenarioApply = 0;
+    (function tick(now) {
+      requestAnimationFrame(tick);
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      controls.update();
+
+      // Story auto-advance
+      advanceStory(dt);
+
+      if (state.p3Playing && state.scenario === "p3") {
+        state.p3Phase += dt * 0.12;
+        if (state.p3Phase >= 1) {
+          state.p3Phase = 1;
+          state.p3Playing = false;
+        }
+        // throttle full material refresh
+        if (now - lastScenarioApply > 100) {
+          applyBlockFocus();
+          lastScenarioApply = now;
+        }
+      }
+
+      const flags = scenarioFlags(state.scenario, state.p3Phase);
+      tickUpsBattery(dt, flags);
+
+      // Re-apply visuals periodically during bridge (gen crank animation)
+      if (state.scenario === "island_bridge" || state.upsDischarging) {
+        if (now - lastScenarioApply > 200) {
+          applyScenario();
+          lastScenarioApply = now;
+        }
+      }
+
+      if (state.flowOn) {
+        flowParticles.forEach((p) => {
+          p.t = (p.t + p.speed * dt) % 1;
+          p.mesh.position.copy(p.curve.getPointAt(p.t));
+        });
+      }
+
+      // Pulse batteries while discharging
+      if (state.upsDischarging || flags.upsOnBattery) {
+        const pulse = 0.35 + 0.35 * Math.sin(now * 0.008);
+        powerMeshes.forEach(({ mesh, role }) => {
+          if (role === "batt" && mesh.material && mesh.material.emissive) {
+            mesh.material.emissive = mesh.material.emissive || new THREE.Color(0x6d28d9);
+            mesh.material.emissiveIntensity = pulse;
+          }
+          if (role === "gen" && flags.gensStarting && mesh.material) {
+            mesh.material.emissiveIntensity = 0.2 + 0.35 * Math.sin(now * 0.012);
+          }
+        });
+      }
+
+      renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
+    })(performance.now());
+  </script>
+</body>
+</html>
